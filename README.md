@@ -62,10 +62,12 @@ datasets
 ```
 
 
-You can download the file '[datasets.zip](https://osf.io/g57up "MouldCTDatasets")' and unzip it to the folder that contains 'train.py' and 'predict.py'.
+You can download the file '[datasets.zip](https://pan.baidu.com/s/1lWqWhH9h44lJUblZMQICag?pwd=8nyh)' and unzip it to the folder that contains 'train.py' and 'predict.py'.
+
+You can download the .pth file '[MouldCTSegNet.pth](https://pan.baidu.com/s/1GaRSyi38pa9oG_0qb859fg?pwd=n27p)'.
 
 ### Argument Configuration
-If you want to change the location of the dataset, you can open the 'MouldCTSegNet.yaml' file and change the corresponding parameters.
+If you want to change the location of the dataset, you can open the 'MouldCTSegNet.yml' file and change the corresponding parameters.
 
 ### Start Training
 After the configuration, start training using the following command:
