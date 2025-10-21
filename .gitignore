@@ -1,2 +1,4 @@
 checkpoint/MouldCTSegNet.pth
 datasets/datasets.zip
+datasets/
+pretrained/

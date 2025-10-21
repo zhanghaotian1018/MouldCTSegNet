@@ -16,10 +16,17 @@ Under the guidance of archaeological experts, the original CT images in the bron
 ---
 ## Environment
 
-Firstly, create a virtual Python 3.8 environment in Anaconda with the necessary dependencies from the **environment.yaml** file provided in the code.
-
+1. create a virtual environment required by the project:
 ```
-conda env create -f MouldCTSegNet.yml
+conda create -n MouldCTSegNet python=3.9.24
+```
+2. Activate the virtual environment:
+```
+conda activate MouldCTSegNet
+```
+3. Install the required packages:
+```
+pip install -r requirements.txt
 ```
 Then, activate the virtual environment and continue to train or test.
 
@@ -72,7 +79,7 @@ If you want to change the location of the dataset, you can open the 'MouldCTSegN
 ### Start Training
 After the configuration, start training using the following command:
 ```
-python train.py --weights=./checkpoint/MouldCTSegNet.pth  \
+python train.py --weights=./pretrained/swin_tiny_patch4_window7_224.pth  \
                 --batch_size=24 \
                 --max_epochs=350 \
                 --n_gpu=1 \
