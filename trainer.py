@@ -51,24 +51,14 @@ class TrainingConfig:
                                 metavar="FILE", help='path to config file')
         self.parser.add_argument("--opts", help="Modify config options", 
                                 default=None, nargs='+')
-        self.parser.add_argument('--zip', action='store_true', 
-                                help='use zipped dataset instead of folder dataset')
         self.parser.add_argument('--cache-mode', type=str, default='part', 
                                 choices=['no', 'full', 'part'],
                                 help='cache mode for dataset')
-        self.parser.add_argument('--resume', help='resume from checkpoint')
-        self.parser.add_argument('--accumulation-steps', type=int, 
-                                help="gradient accumulation steps")
-        self.parser.add_argument('--use-checkpoint', action='store_true',
-                                help="use gradient checkpointing to save memory")
+        self.parser.add_argument('--resume', type=str, default=None,
+                                help='path to checkpoint to resume from')
         self.parser.add_argument('--amp-opt-level', type=str, default='O1', 
                                 choices=['O0', 'O1', 'O2'],
                                 help='mixed precision opt level')
-        self.parser.add_argument('--tag', help='tag of experiment')
-        self.parser.add_argument('--eval', action='store_true', 
-                                help='Perform evaluation only')
-        self.parser.add_argument('--throughput', action='store_true', 
-                                help='Test throughput only')
     
     def get_config(self):
         """Parse arguments and return configuration"""
@@ -182,20 +172,65 @@ class TrainingMonitor:
         self.writer = SummaryWriter(self.save_dir + '/log')
         return self.writer
     
+    def save_checkpoint(self, epoch, model, optimizer, train_iter_num, val_iter_num, best_loss, is_best=False):
+        """Save training checkpoint"""
+        checkpoint = {
+            'epoch': epoch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'train_iter_num': train_iter_num,
+            'val_iter_num': val_iter_num,
+            'best_loss': best_loss
+        }
+        
+        # Save regular checkpoint
+        torch.save(checkpoint, self.save_dir + os.sep + f'checkpoint_epoch{epoch}.pth')
+        
+        # Save as latest checkpoint
+        torch.save(checkpoint, self.save_dir + os.sep + 'checkpoint_latest.pth')
+        
+        # If this is the best model, save it separately
+        if is_best:
+            torch.save(model.state_dict(), self.save_dir + os.sep + f'MouldCTSegNet_best_epoch{epoch}.pth')
+        
+        logging.info(f'Checkpoint saved at epoch {epoch}')
+    
+    def load_checkpoint(self, checkpoint_path, model, optimizer, device):
+        """Load training checkpoint"""
+        if not os.path.isfile(checkpoint_path):
+            raise FileNotFoundError(f"Checkpoint file not found: {checkpoint_path}")
+        
+        checkpoint = torch.load(checkpoint_path, map_location=device)
+        
+        # Load model and optimizer states
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        
+        # Load training state
+        epoch = checkpoint['epoch']
+        train_iter_num = checkpoint.get('train_iter_num', 0)
+        val_iter_num = checkpoint.get('val_iter_num', 0)
+        best_loss = checkpoint.get('best_loss', float('inf'))
+        
+        logging.info(f"Loaded checkpoint from epoch {epoch}")
+        logging.info(f"Resuming from iteration {train_iter_num} (train), {val_iter_num} (val)")
+        logging.info(f"Previous best loss: {best_loss}")
+        
+        return epoch, train_iter_num, val_iter_num, best_loss
+    
     def update_best_loss(self, current_loss, epoch, model):
         """Update best loss and save model if improved"""
         if current_loss < self.best_loss:
             self.best_loss = current_loss
-            torch.save(model.state_dict(), 
-                      self.save_dir + os.sep + f'MouldCTSegNet_epoch{epoch}.pth')
-            logging.info(f'epoch{epoch} Model saved successfully!')
+            self.save_checkpoint(epoch, model, None, 0, 0, self.best_loss, is_best=True)
+            logging.info(f'epoch{epoch} Best model saved successfully!')
             return True
         return False
     
     def save_final_model(self, model, epoch):
         """Save final model after training"""
         torch.save(model.state_dict(), 
-                  self.save_dir + os.sep + f'MouldCTSegNet_Last_epoch.pth')
+                  self.save_dir + os.sep + f'MouldCTSegNet_final_epoch{epoch}.pth')
         logging.info('Final Model saved successfully!')
 
 
@@ -216,16 +251,22 @@ class Trainer:
         self.monitor = TrainingMonitor(self.save_dir)
         
         # Training state
+        self.start_epoch = 1
         self.train_iter_num = 0
         self.val_iter_num = 0
+        self.best_loss = float('inf')
         self.MixedLossFunction = True
     
     def _create_save_dir(self):
         """Create directory for saving models and logs"""
-        save_dir = self.config.MODEL.SAVE_DIR + '/' + str(
-            time.localtime().tm_mon) + '_' + str(
-            time.localtime().tm_mday) + '_' + str(
-            time.localtime().tm_hour)
+        if self.args.output_dir:
+            save_dir = self.args.output_dir
+        else:
+            save_dir = self.config.MODEL.SAVE_DIR + '/' + str(
+                time.localtime().tm_mon) + '_' + str(
+                time.localtime().tm_mday) + '_' + str(
+                time.localtime().tm_hour)
+        
         os.makedirs(save_dir, exist_ok=True)
         return save_dir
     
@@ -248,6 +289,13 @@ class Trainer:
         # Calculate iteration numbers
         train_max_iterations = self.args.max_epochs * len(train_dataloader)
         val_max_iterations = self.args.max_epochs * len(val_dataloader)
+        
+        # Resume from checkpoint if specified
+        if self.args.resume:
+            checkpoint_path = self.args.resume
+            self.start_epoch, self.train_iter_num, self.val_iter_num, self.best_loss = \
+                self.monitor.load_checkpoint(checkpoint_path, model, optimizer, self.device)
+            self.monitor.best_loss = self.best_loss
         
         return {
             'model': model,
@@ -322,8 +370,9 @@ class Trainer:
                 pbar.set_postfix(**{'loss(batch)': loss.item()})
                 
                 # Log training info
-                logging.info(f'iteration {self.train_iter_num} : loss : {loss.item():.6f}, '
-                           f'loss_ce: {loss_ce.item():.6f}, loss_dice: {loss_dice.item():.6f}')
+                if self.train_iter_num % 10 == 0:  # Log every 10 iterations to reduce clutter
+                    logging.info(f'iteration {self.train_iter_num} : loss : {loss.item():.6f}, '
+                               f'loss_ce: {loss_ce.item():.6f}, loss_dice: {loss_dice.item():.6f}')
                 
                 # Log images every 20 steps
                 if self.train_iter_num % 20 == 0:
@@ -385,27 +434,27 @@ class Trainer:
                     self._log_step_metrics(writer, 'val', None, loss, loss_ce, 
                                           loss_dice, dice_score, self.val_iter_num)
                     
-                    # Log validation info
-                    logging.info(f'val iteration {self.val_iter_num} : loss : {loss.item():.6f}, '
-                               f'loss_ce: {loss_ce.item():.6f}, loss_dice: {loss_dice.item():.6f}')
-                    
-                    # Log images every 20 steps
-                    if self.val_iter_num % 20 == 0:
-                        self._log_images(writer, 'val', images, pred, masks, self.val_iter_num)
-                    
                     # Update progress bar
                     pbar.update(images.shape[0])
                     pbar.set_postfix(**{'loss(batch)': loss.item()})
         
+        # Calculate average validation loss
+        avg_val_loss = np.mean(val_epoch_avg_total_loss)
+        
+        # Log validation info
+        logging.info(f'Validation Epoch {epoch}: Average Loss: {avg_val_loss:.6f}, '
+                   f'CE Loss: {np.mean(val_epoch_avg_ce_loss):.6f}, '
+                   f'Dice Loss: {np.mean(val_epoch_avg_dice_loss):.6f}')
+        
         # Log epoch metrics
         self._log_epoch_metrics(writer, 'val',
-                               np.mean(val_epoch_avg_total_loss),
+                               avg_val_loss,
                                np.mean(val_epoch_avg_ce_loss),
                                np.mean(val_epoch_avg_dice_loss),
                                np.mean(val_epoch_avg_dice_score),
                                epoch)
         
-        return np.mean(val_epoch_avg_total_loss)
+        return avg_val_loss
     
     def _log_step_metrics(self, writer, phase, lr, loss, loss_ce, loss_dice, dice_score, iteration):
         """Log metrics for each training/validation step"""
@@ -454,7 +503,7 @@ class Trainer:
         train_max_iterations = components['train_max_iterations']
         
         # Training loop
-        for epoch in range(1, self.args.max_epochs + 1):
+        for epoch in range(self.start_epoch, self.args.max_epochs + 1):
             # Train for one epoch
             train_loss = self.train_epoch(epoch, model, train_dataloader, optimizer,
                                         ce_loss, dice_loss, writer, train_max_iterations)
@@ -464,7 +513,12 @@ class Trainer:
                                          ce_loss, dice_loss, writer)
             
             # Update best model
-            self.monitor.update_best_loss(val_loss, epoch, model)
+            is_best = self.monitor.update_best_loss(val_loss, epoch, model)
+            
+            # Save checkpoint
+            self.monitor.save_checkpoint(epoch, model, optimizer, 
+                                       self.train_iter_num, self.val_iter_num, 
+                                       self.monitor.best_loss, is_best)
             
             # Save final model at last epoch
             if epoch == self.args.max_epochs:
@@ -472,7 +526,7 @@ class Trainer:
         
         # Close writer and log completion
         writer.close()
-        logging.info('Train Finished!')
+        logging.info('Training Finished!')
 
 
 def main():
@@ -485,11 +539,25 @@ def main():
     os.makedirs(config.MODEL.MODEL_DIR, exist_ok=True)
     
     # Setup logging
-    logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+    logging.basicConfig(
+        level=logging.INFO, 
+        format='%(asctime)s - %(levelname)s: %(message)s',
+        handlers=[
+            logging.FileHandler(os.path.join(args.output_dir if args.output_dir else config.MODEL.SAVE_DIR, 'training.log')),
+            logging.StreamHandler()
+        ]
+    )
     
     # Setup device
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     logging.info(f'Using device {device}')
+    
+    # Set random seed for reproducibility
+    if args.deterministic:
+        torch.manual_seed(args.seed)
+        torch.cuda.manual_seed(args.seed)
+        np.random.seed(args.seed)
+        torch.backends.cudnn.deterministic = True
     
     # Enable cuDNN benchmark for better performance
     cudnn.benchmark = True
