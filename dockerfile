@@ -1,60 +1,60 @@
-# 1. 基础镜像：匹配PyTorch 2.8.0 + CUDA 12.9，选择runtime版本减小体积
-# 若需编译操作（如自定义算子），可替换为"pytorch/pytorch:2.8.0-cuda12.9-cudnn9-devel"
+# 1. Base image: Match PyTorch 2.8.0 + CUDA 12.9, choose runtime version to reduce size
+# For compilation tasks (e.g., custom operators), replace with "pytorch/pytorch:2.8.0-cuda12.9-cudnn9-devel"
 FROM pytorch/pytorch:2.8.0-cuda12.9-cudnn9-runtime
 
-# 2. 维护者与描述（可选，便于团队协作）
+# 2. Maintainer and description (optional, for team collaboration)
 LABEL maintainer="Haotian Zhang"
 LABEL description="Docker env for MouldCTSegNet"
 
-# 3. 基础配置：工作目录、时区（避免日志时间错乱）
+# 3. Basic configuration: Working directory and time zone (to avoid log time confusion)
 WORKDIR /workspace
 ENV TZ=Asia/Shanghai
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
-# 4. 安装系统级依赖（支撑Python库运行，如OpenCV、MedPy等）
-# 先更新包列表（带容错）
-# 正确写法：所有包都在apt-get install参数中，用空格分隔
+# 4. Install system-level dependencies (support Python libraries such as OpenCV, MedPy, etc.)
+# Update package list first (with fault tolerance)
+# Correct format: All packages are listed in apt-get install parameters, separated by spaces
 RUN apt-get update --fix-missing && \
     apt-get install -y --no-install-recommends \
-    # 基础工具包
+    # Basic tool packages
     git \
     wget \
     unzip \
     build-essential \
-    # 图像处理基础库
+    # Basic image processing libraries
     libgl1-mesa-glx \
     libglib2.0-0 \
     libpng-dev \
     libjpeg-dev \
-    # vtk依赖的X11图形库（新增，正确放在install列表中）
+    # X11 graphics libraries required by vtk (newly added, correctly placed in the install list)
     libxrender1 \
     libxt6 \
     libxext6 \
-    # 可选：补充vtk可能依赖的其他X11库（如果后续还有缺失）
+    # Optional: Supplement other X11 libraries that vtk may depend on (if missing in the future)
     libx11-6 \
     libegl1-mesa \
     libegl1-mesa-dev \
     && \  
-    # 安装完成后，执行清理命令
+    # After installation, execute cleanup commands
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# 5. 复制本地requirements.txt到容器内（确保文件路径与Dockerfile同级）
+# 5. Copy local requirements.txt into the container (ensure the file path is at the same level as Dockerfile)
 COPY requirements.txt /workspace/requirements.txt
 
-# 6. 安装Python依赖（使用国内源加速，避免版本冲突）
+# 6. Install Python dependencies (use domestic mirror for acceleration, avoid version conflicts)
 RUN pip install --no-cache-dir \
     -r /workspace/requirements.txt \
     && rm -rf /root/.cache/pip  
 
-# 7. 配置CUDA环境变量（确保依赖能正确识别CUDA路径）
+# 7. Configure CUDA environment variables (ensure dependencies can correctly identify CUDA path)
 ENV CUDA_HOME=/usr/local/cuda-12.9
 ENV PATH=$CUDA_HOME/bin:$PATH
 ENV LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
 
-# 8. 暴露常用端口（根据需求调整，如TensorBoard、Jupyter）
+# 8. Expose common ports (adjust as needed, e.g., TensorBoard, Jupyter)
 EXPOSE 6006
 EXPOSE 8888
 
-# 9. 启动命令：默认进入bash终端，可按需修改（如启动Jupyter）
+# 9. Startup command: Enter bash terminal by default, modify as needed (e.g., start Jupyter)
 CMD ["bash"]

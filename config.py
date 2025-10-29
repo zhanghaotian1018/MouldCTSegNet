@@ -206,24 +206,12 @@ def update_config(config, args):
     # merge from specific arguments
     if args.batch_size:
         config.DATA.BATCH_SIZE = args.batch_size
-    if args.zip:
-        config.DATA.ZIP_MODE = True
     if args.cache_mode:
         config.DATA.CACHE_MODE = args.cache_mode
     if args.resume:
         config.MODEL.RESUME = args.resume
-    if args.accumulation_steps:
-        config.TRAIN.ACCUMULATION_STEPS = args.accumulation_steps
-    if args.use_checkpoint:
-        config.TRAIN.USE_CHECKPOINT = True
     if args.amp_opt_level:
         config.AMP_OPT_LEVEL = args.amp_opt_level
-    if args.tag:
-        config.TAG = args.tag
-    if args.eval:
-        config.EVAL_MODE = True
-    if args.throughput:
-        config.THROUGHPUT_MODE = True
 
     config.freeze()
 
