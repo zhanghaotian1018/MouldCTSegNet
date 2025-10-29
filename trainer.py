@@ -173,47 +173,51 @@ class TrainingMonitor:
         return self.writer
     
     def save_checkpoint(self, epoch, model, optimizer, train_iter_num, val_iter_num, best_loss, is_best=False):
-        """Save training checkpoint"""
+        """Save training checkpoint - only save latest and best models"""
         checkpoint = {
             'epoch': epoch,
             'model_state_dict': model.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict(),
             'train_iter_num': train_iter_num,
             'val_iter_num': val_iter_num,
             'best_loss': best_loss
         }
         
-        # Save regular checkpoint
-        torch.save(checkpoint, self.save_dir + os.sep + f'checkpoint_epoch{epoch}.pth')
+        # Add optimizer state if provided
+        if optimizer is not None:
+            checkpoint['optimizer_state_dict'] = optimizer.state_dict()
         
-        # Save as latest checkpoint
-        torch.save(checkpoint, self.save_dir + os.sep + 'checkpoint_latest.pth')
+        # Always save the latest checkpoint (overwrite)
+        torch.save(checkpoint, os.path.join(self.save_dir, 'MouldCTSegNet_Last_epoch.pth'))
         
         # If this is the best model, save it separately
         if is_best:
-            torch.save(model.state_dict(), self.save_dir + os.sep + f'MouldCTSegNet_best_epoch{epoch}.pth')
+            torch.save(model.state_dict(), os.path.join(self.save_dir, 'MouldCTSegNet_best.pth'))
+            logging.info(f'Best model saved at epoch {epoch}')
         
         logging.info(f'Checkpoint saved at epoch {epoch}')
     
     def load_checkpoint(self, checkpoint_path, model, optimizer, device):
-        """Load training checkpoint"""
+        """Load training checkpoint for resuming training"""
         if not os.path.isfile(checkpoint_path):
             raise FileNotFoundError(f"Checkpoint file not found: {checkpoint_path}")
         
         checkpoint = torch.load(checkpoint_path, map_location=device)
         
-        # Load model and optimizer states
+        # Load model state
         model.load_state_dict(checkpoint['model_state_dict'])
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        
+        # Load optimizer state if available
+        if optimizer is not None and 'optimizer_state_dict' in checkpoint:
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         
         # Load training state
-        epoch = checkpoint['epoch']
+        epoch = checkpoint['epoch'] + 1  # Start from next epoch
         train_iter_num = checkpoint.get('train_iter_num', 0)
         val_iter_num = checkpoint.get('val_iter_num', 0)
         best_loss = checkpoint.get('best_loss', float('inf'))
         
-        logging.info(f"Loaded checkpoint from epoch {epoch}")
-        logging.info(f"Resuming from iteration {train_iter_num} (train), {val_iter_num} (val)")
+        logging.info(f"Loaded checkpoint from epoch {checkpoint['epoch']}")
+        logging.info(f"Resuming from epoch {epoch}, iteration {train_iter_num} (train), {val_iter_num} (val)")
         logging.info(f"Previous best loss: {best_loss}")
         
         return epoch, train_iter_num, val_iter_num, best_loss
@@ -222,16 +226,11 @@ class TrainingMonitor:
         """Update best loss and save model if improved"""
         if current_loss < self.best_loss:
             self.best_loss = current_loss
-            self.save_checkpoint(epoch, model, None, 0, 0, self.best_loss, is_best=True)
+            # Save best model
+            torch.save(model.state_dict(), os.path.join(self.save_dir, 'MouldCTSegNet_best.pth'))
             logging.info(f'epoch{epoch} Best model saved successfully!')
             return True
         return False
-    
-    def save_final_model(self, model, epoch):
-        """Save final model after training"""
-        torch.save(model.state_dict(), 
-                  self.save_dir + os.sep + f'MouldCTSegNet_final_epoch{epoch}.pth')
-        logging.info('Final Model saved successfully!')
 
 
 class Trainer:
@@ -322,7 +321,7 @@ class Trainer:
                  desc=f'Epoch {epoch}/{self.args.max_epochs}', 
                  unit='img') as pbar:
             
-            for i_batch, sample_batch in enumerate(train_dataloader):
+            for _, sample_batch in enumerate(train_dataloader):
                 # Move data to device
                 images, masks = sample_batch['image'], sample_batch['mask']
                 images = images.to(self.device)
@@ -401,7 +400,7 @@ class Trainer:
                      desc=f'Validation Epoch {epoch}/{self.args.max_epochs}', 
                      unit='img') as pbar:
                 
-                for i_batch, sample_batch in enumerate(val_dataloader):
+                for _, sample_batch in enumerate(val_dataloader):
                     # Move data to device
                     images, masks = sample_batch['image'], sample_batch['mask']
                     images = images.to(self.device)
@@ -515,14 +514,10 @@ class Trainer:
             # Update best model
             is_best = self.monitor.update_best_loss(val_loss, epoch, model)
             
-            # Save checkpoint
+            # Save latest checkpoint (overwrite previous)
             self.monitor.save_checkpoint(epoch, model, optimizer, 
                                        self.train_iter_num, self.val_iter_num, 
-                                       self.monitor.best_loss, is_best)
-            
-            # Save final model at last epoch
-            if epoch == self.args.max_epochs:
-                self.monitor.save_final_model(model, epoch)
+                                       self.monitor.best_loss, is_best=is_best)
         
         # Close writer and log completion
         writer.close()
@@ -539,11 +534,14 @@ def main():
     os.makedirs(config.MODEL.MODEL_DIR, exist_ok=True)
     
     # Setup logging
+    log_dir = args.output_dir if args.output_dir else config.MODEL.SAVE_DIR
+    os.makedirs(log_dir, exist_ok=True)
+    
     logging.basicConfig(
         level=logging.INFO, 
         format='%(asctime)s - %(levelname)s: %(message)s',
         handlers=[
-            logging.FileHandler(os.path.join(args.output_dir if args.output_dir else config.MODEL.SAVE_DIR, 'training.log')),
+            logging.FileHandler(os.path.join(log_dir, 'training.log')),
             logging.StreamHandler()
         ]
     )

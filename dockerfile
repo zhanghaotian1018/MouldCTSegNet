@@ -12,26 +12,40 @@ ENV TZ=Asia/Shanghai
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # 4. 安装系统级依赖（支撑Python库运行，如OpenCV、MedPy等）
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# 先更新包列表（带容错）
+# 正确写法：所有包都在apt-get install参数中，用空格分隔
+RUN apt-get update --fix-missing && \
+    apt-get install -y --no-install-recommends \
+    # 基础工具包
     git \
     wget \
     unzip \
     build-essential \
+    # 图像处理基础库
     libgl1-mesa-glx \
     libglib2.0-0 \
     libpng-dev \
     libjpeg-dev \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    # vtk依赖的X11图形库（新增，正确放在install列表中）
+    libxrender1 \
+    libxt6 \
+    libxext6 \
+    # 可选：补充vtk可能依赖的其他X11库（如果后续还有缺失）
+    libx11-6 \
+    libegl1-mesa \
+    libegl1-mesa-dev \
+    && \  
+    # 安装完成后，执行清理命令
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 # 5. 复制本地requirements.txt到容器内（确保文件路径与Dockerfile同级）
 COPY requirements.txt /workspace/requirements.txt
 
 # 6. 安装Python依赖（使用国内源加速，避免版本冲突）
 RUN pip install --no-cache-dir \
-    -i https://pypi.tuna.tsinghua.edu.cn/simple \
     -r /workspace/requirements.txt \
-    && rm -rf /root/.cache/pip  # 彻底删除pip缓存
+    && rm -rf /root/.cache/pip  
 
 # 7. 配置CUDA环境变量（确保依赖能正确识别CUDA路径）
 ENV CUDA_HOME=/usr/local/cuda-12.9
