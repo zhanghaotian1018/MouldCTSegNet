@@ -1,22 +1,25 @@
 # Semantic segmentation and 3D reconstruction of CT images of bronze casting moulds and cores based on a deep learning method
 
-This repository contains deep learning code for semantic segmentation of bronze casting moulds and cores, based on Swin U-Net. 
+This repository contains deep learning code for semantic segmentation of bronze casting moulds and cores, based on Swin U-Net.
 For detailed information, please refer to the paper "Semantic segmentation and 3D reconstruction of CT images of bronze casting moulds and cores based on a deep learning method".
 
 ---
 ## Dataset
 
 The datasets of bronze casting moulds and cores used in this study came from the Taijiasi site, a high-ranking settlement in the Huaihe River basin during the early to middle Shang Dynasty (14th-13th century BCE).
-By conducting CT scanning on moulds and cores, we can obtain a series of continuous 2D CT images. 
-However, some of them may suffer from poor quality due to underexposure or blurriness. 
-These images could make a poor influence on network training and need to be filtered out before annotation. 
+By conducting CT scanning on moulds and cores, we can obtain a series of continuous 2D CT images.
+However, some of them may suffer from poor quality due to underexposure or blurriness.
+These images could make a poor influence on network training and need to be filtered out before annotation.
 Finally, 12 samples with distinct features were selected to construct the dataset.
 Under the guidance of archaeological experts, the original CT images in the bronze casting mould and core datasets were annotated using the polygon annotation tool in LabelMe software.
 
 ---
 ## Environment
 
-1. create a virtual environment required by the project:
+### Using Conda to Build Environment (Recommended)
+We strongly recommend using Conda to build the environment as it provides better support for GUI applications like VTK-based 3D visualization.
+
+1. Create a virtual environment required by the project:
 ```
 conda create -n MouldCTSegNet python=3.9.24
 ```
@@ -30,8 +33,30 @@ pip install -r requirements.txt
 ```
 Then, activate the virtual environment and continue to train or test.
 
+### Using Docker to Build Environment
+
+**​​Note​​**: Docker environment is mainly suitable for training and prediction tasks. For 3D reconstruction with VTK visualization, we recommend using the Conda environment due to better GUI support.
+1. Build the Docker image:
+```
+docker build -t mouldctsegnet:latest .
+```
+2. Run the Docker container:
+```
+docker run --gpus all -it --shm-size=16g -v ${PWD}:/workspace -p 6006:6006 --name mouldctsegnet-container mouldctsegnet
+```
+
+**Important Limitations​​**:
+- The Docker environment can handle training (trainer.py) and prediction (predict.py) tasks
+- For 3D reconstruction using 3D_Reconstruction.py, you may need to install VTK on the host machine and run the visualization outside the container
+- GUI applications within Docker require complex X11 forwarding configuration
+
 ---
-## Train
+## Pipeline Overview
+The complete workflow consists of four main steps:
+1. **​Training​​**: Use trainer.pyto train the segmentation model
+2. **​​Prediction​​**: Use predict.pyto generate segmentation masks
+3. ​**​Region Extraction​​**: Use ExtractCertainCategory.pyto extract specific regions
+4. **​​3D Reconstruction​​**: Use 3D_Reconstruction.pyfor 3D visualization and reconstruction
 
 ### Dataset Preparation
 To train the MouldCTSegNet model, we need to prepare the dataset of bronze casting moulds and cores.
@@ -71,25 +96,18 @@ datasets
 
 You can download the file '[datasets.zip](https://pan.baidu.com/s/1lWqWhH9h44lJUblZMQICag?pwd=8nyh)' and unzip it to the folder that contains 'train.py' and 'predict.py'.
 
-You can download the .pth file '[MouldCTSegNet.pth](https://pan.baidu.com/s/1GaRSyi38pa9oG_0qb859fg?pwd=n27p)'.
+You can download the .pth file '[MouldCTSegNet_best.pth](https://pan.baidu.com/s/1NgrRAHdkiWLf7K_mczP2EA?pwd=vhe4)'.
+
+The pretrain .pth file '[swin_T.pth](https://pan.baidu.com/s/1PYEDpnpMTgAmlIMMwEn6BA?pwd=6ige)'.
 
 ### Argument Configuration
-If you want to change the location of the dataset, you can open the 'MouldCTSegNet.yml' file and change the corresponding parameters.
+If you want to change the location of the dataset, you can open the './configs/MouldCTSegNet_train.yaml' file and change the corresponding parameters.
 
-### Start Training
+### Step 1: Training
 After the configuration, start training using the following command:
 ```
-python train.py --weights=./pretrained/swin_tiny_patch4_window7_224.pth  \
-                --batch_size=24 \
-                --max_epochs=350 \
-                --n_gpu=1 \
-                --base_lr=0.01
-                --num_classes=3
+python trainer.py --batch_size=24 --max_epochs=350 --n_gpu=1 --base_lr=0.01 --num_classes=3
 ```
-
-The checkpoints of the trained model will be saved in the `/checkpoint` folder.
-
-`--weights` argument is the weight file of the pre-trained model, which is used to initialize the model. Default is `./checkpoint/MouldCTSegNet.pth`.
 
 `--batch_size` argument is the number of samples in each batch. Default is 24.
 
@@ -101,22 +119,21 @@ The checkpoints of the trained model will be saved in the `/checkpoint` folder.
 
 `--num_classes` argument is the number of classes in the dataset. Default is 3.
 
-When the training is complete, the trained model weight file will be saved in a subfolder named with your training start time, like `1_15_50`, in the `/checkpoint` folder.
+When the training is complete, the trained model weight files will be saved directly in the `./checkpoint` folder (or the directory specified by --output_dir parameter). The folder will contain:
+- `MouldCTSegNet_best.pth`: the best model weights based on validation loss
+- `MouldCTSegNet_Last_epoch.pth`: the latest checkpoint containing model and optimizer states
 
-In your folder which keeps trained model weight file, you can find a `logs` folder, which contains the training logs of the model.
-You can use TensorBoard to monitor the training process.
+In the same directory, you can find a `log` folder which contains the training logs for TensorBoard. You can use TensorBoard to monitor the training process by running:
+```
+tensorboard --logdir=./checkpoint/log
+```
 
 ---
-## Test
+### Step 2: Prediction
 After training, evaluation can be performed using the following command:
 ```
-python predict.py --weights=./checkpoint/MouldCTSegNet.pth \
-                  --root_path=./datasets/test \
-                  --output_dir=./datasets/pred_output \
+python predict.py --root_path=./datasets/test --output_dir=./datasets/pred_output
 ```
-
-`--weights` is the weight file of the trained model, which is saved in the `/checkpoint` folder.
-
 `--root_path` is the path of the input CT images, which should be in the format of **.png** files.
 
 `--output_dir` is the path of the output binary masks, which will be saved in the `./datasets/pred_output` folder.
@@ -124,20 +141,19 @@ python predict.py --weights=./checkpoint/MouldCTSegNet.pth \
 In the output folder, the predicted binary masks will be saved in the format of **.png** files.
 
 ---
-## 3D reconstruction
-To reconstruct 3D models of bronze casting moulds and cores, we use VTK library.
-
-### Dataset Preparation
+### Step 3: Region Extraction
 Different from the previous step, we need to prepare all CT images of the samples in `.png` format in a folder such as `./datasets/H351-1-0001`.
 
 Using the model we trained in the previous step, we can predict the binary masks of moulding CT images.
+```
+python predict.py --root_path=./datasets/H351-1-0001 --output_dir=./datasets/H351-1-0001_pred
+```
 
-Based on the binary masks of moulding CT images, 
-we can extract the bright part, dark part, original image and binary mask of each CT image by using the following command:
+To extract bright and dark regions from the segmented images:
 ```
 python ExtractCertainCategory.py --sample_folder=.//datasets//H351-1-0001 \
-                                  --mask_folder=.//datasets//H351-1-0001_pred \
-                                  --output_folder=.//datasets//H351-1-0001_output \
+                                 --mask_folder=.//datasets//H351-1-0001_pred \
+                                 --output_folder=.//datasets//H351-1-0001_output \
 ```
 
 `--sample_folder` is the path of the input CT images, which should be in the format of **.png** files.
@@ -146,14 +162,10 @@ python ExtractCertainCategory.py --sample_folder=.//datasets//H351-1-0001 \
 
 `--output_folder` is the path of the output folder, which will be saved in the `./datasets/H351-1-0001_output` folder.
 
-### Visualize 3D reconstruction model
-By preparing `bright part`, `dark part`, `original image` and `binary mask`, we can use the following command to reconstruct 3D models of moulding CT images:
+### Step 4: 3D Reconstruction
+To reconstruct 3D models of bronze casting moulds and cores:
 ```
-python 3D_Reconstruction.py --sample_folder=.//datasets//H351-1-0001 \
-                             --mask_folder=.//datasets//H351-1-0001_pred \
-                             --output_folder=.//datasets//H351-1-0001_output \
-                             --start_index=0 \
-                             --end_index=1000
+python 3D_Reconstruction.py --sample_folder=.//datasets//H351-1-0001 --mask_folder=.//datasets//H351-1-0001_pred --output_folder=.//datasets//H351-1-0001_output --start_index=0 --end_index=1000
 ```
 `--sample_folder` is the path of the input CT images, which should be in the format of **.png** files.
 
@@ -171,3 +183,5 @@ and the right viewport is the fusion display of the original image and the color
 
 In addition, you can use the mouse to rotate, zoom in and out, and click the **CHANGE** button to show different parts of 3D reconstruction model.
 Pressing the mouse wheel and dragging the mouse will change the position of the position of the virtual slice.
+
+**Important Note for Docker Users**​​: The 3D reconstruction step requires GUI support. If you're using Docker, you may need to run this step on the host machine with proper VTK installation, or configure X11 forwarding for Docker.
