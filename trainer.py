@@ -33,7 +33,8 @@ class TrainingConfig:
                                 help='output channel of network')
         self.parser.add_argument('--batch_size', type=int, default=24, 
                                 help='batch_size per gpu')
-        self.parser.add_argument('--output_dir', type=str, help='output dir')
+        self.parser.add_argument('--output_dir', type=str, default='./checkpoint',
+                                help='output dir')
         self.parser.add_argument('--max_epochs', type=int, default=350, 
                                 help='maximum epoch number to train')
         self.parser.add_argument('--n_gpu', type=int, default=1, 
@@ -258,13 +259,7 @@ class Trainer:
     
     def _create_save_dir(self):
         """Create directory for saving models and logs"""
-        if self.args.output_dir:
-            save_dir = self.args.output_dir
-        else:
-            save_dir = self.config.MODEL.SAVE_DIR + '/' + str(
-                time.localtime().tm_mon) + '_' + str(
-                time.localtime().tm_mday) + '_' + str(
-                time.localtime().tm_hour)
+        save_dir = self.args.output_dir
         
         os.makedirs(save_dir, exist_ok=True)
         return save_dir

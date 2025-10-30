@@ -35,7 +35,7 @@ Then, activate the virtual environment and continue to train or test.
 
 ### Using Docker to Build Environment
 
-**​​Note​​**: Docker environment is mainly suitable for training and prediction tasks. For 3D reconstruction with VTK visualization, we recommend using the Conda environment due to better GUI support.
+**Note**: Docker environment is mainly suitable for training and prediction tasks. For 3D reconstruction with VTK visualization, we recommend using the Conda environment due to better GUI support.
 1. Build the Docker image:
 ```
 docker build -t mouldctsegnet:latest .
@@ -53,10 +53,10 @@ docker run --gpus all -it --shm-size=16g -v ${PWD}:/workspace -p 6006:6006 --nam
 ---
 ## Pipeline Overview
 The complete workflow consists of four main steps:
-1. **​Training​​**: Use trainer.pyto train the segmentation model
-2. **​​Prediction​​**: Use predict.pyto generate segmentation masks
-3. ​**​Region Extraction​​**: Use ExtractCertainCategory.pyto extract specific regions
-4. **​​3D Reconstruction​​**: Use 3D_Reconstruction.pyfor 3D visualization and reconstruction
+1. **Training**: Use trainer.pyto train the segmentation model
+2. **Prediction**: Use predict.pyto generate segmentation masks
+3. **Region Extraction**: Use ExtractCertainCategory.pyto extract specific regions
+4. **3D Reconstruction**: Use 3D_Reconstruction.pyfor 3D visualization and reconstruction
 
 ### Dataset Preparation
 To train the MouldCTSegNet model, we need to prepare the dataset of bronze casting moulds and cores.
@@ -184,4 +184,4 @@ and the right viewport is the fusion display of the original image and the color
 In addition, you can use the mouse to rotate, zoom in and out, and click the **CHANGE** button to show different parts of 3D reconstruction model.
 Pressing the mouse wheel and dragging the mouse will change the position of the position of the virtual slice.
 
-**Important Note for Docker Users**​​: The 3D reconstruction step requires GUI support. If you're using Docker, you may need to run this step on the host machine with proper VTK installation, or configure X11 forwarding for Docker.
+**Important Note for Docker Users**: The 3D reconstruction step requires GUI support. If you're using Docker, you may need to run this step on the host machine with proper VTK installation, or configure X11 forwarding for Docker.
