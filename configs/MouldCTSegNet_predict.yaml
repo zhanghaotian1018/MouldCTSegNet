@@ -2,7 +2,7 @@ MODEL:
   TYPE: swin
   NAME: swin_tiny_patch4_window7_224
   DROP_PATH_RATE: 0.2
-  PRETRAIN_CKPT: "./checkpoint/MouldCTSegNet.pth"
+  PRETRAIN_CKPT: "./checkpoint/MouldCTSegNet_best.pth"
   TRAIN_IMAGE_DIR: ".//datasets//train//Image"
   TRAIN_MASK_DIR: ".//datasets//train///Mask"
   VAL_IMAGE_DIR: './/datasets//val//Image'

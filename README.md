@@ -132,7 +132,7 @@ tensorboard --logdir=./checkpoint/log
 ### Step 2: Prediction
 After training, evaluation can be performed using the following command:
 ```
-python predict.py --root_path=./datasets/test --output_dir=./datasets/pred_output
+python predict.py --root_path=./datasets/test/Image --output_dir=./datasets/pred_output
 ```
 `--root_path` is the path of the input CT images, which should be in the format of **.png** files.
 

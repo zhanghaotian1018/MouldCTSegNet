@@ -37,7 +37,7 @@ class PredictionConfig:
                                 default=r'./checkpoint/MouldCTSegNet_best.pth',
                                 help='path to trained model checkpoint')
         self.parser.add_argument('--cfg', type=str, 
-                                default='./configs/MouldCTSegNet.yaml', 
+                                default='./configs/MouldCTSegNet_predict.yaml', 
                                 metavar="FILE", help='path to config file')
         self.parser.add_argument("--opts", help="Modify config options", 
                                 default=None, nargs='+')
