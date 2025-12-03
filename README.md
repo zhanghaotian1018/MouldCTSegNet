@@ -98,8 +98,6 @@ You can download the file '[datasets.zip](https://pan.baidu.com/s/1lWqWhH9h44lJU
 
 You can download the .pth file '[MouldCTSegNet_best.pth](https://pan.baidu.com/s/1NgrRAHdkiWLf7K_mczP2EA?pwd=vhe4)'.
 
-The pretrain .pth file '[swin_T.pth](https://pan.baidu.com/s/1PYEDpnpMTgAmlIMMwEn6BA?pwd=6ige)'.
-
 ### Argument Configuration
 If you want to change the location of the dataset, you can open the './configs/MouldCTSegNet_train.yaml' file and change the corresponding parameters.
 
