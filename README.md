@@ -15,6 +15,7 @@ Under the guidance of archaeological experts, the original CT images in the bron
 
 ---
 ## Environment
+We provide two methods for setting up the environment: Conda and Docker. Considering the visualization steps required later in the pipeline, we strongly recommend using the Conda approach for environment setup, as it offers better support for GUI applications such as VTK-based 3D visualization.
 
 ### Using Conda to Build Environment (Recommended)
 We strongly recommend using Conda to build the environment as it provides better support for GUI applications like VTK-based 3D visualization.
@@ -93,9 +94,12 @@ datasets
         └── ...
 ```
 
-
-You can download the file '[datasets.zip](https://pan.baidu.com/s/1lWqWhH9h44lJUblZMQICag?pwd=8nyh)' and unzip it to the folder that contains 'train.py' and 'predict.py'.
-
+Here are the download links for the files required to set up the project:
+1. **Dataset**:
+Download '[datasets.zip](https://pan.baidu.com/s/1lWqWhH9h44lJUblZMQICag?pwd=8nyh)' and extract it into the same directory containing 'train.py' and 'predict.py'.
+2. **Pre-trained Weights**:
+Download the Swin Transformer weights '[swin_T.pth](https://pan.baidu.com/s/1PYEDpnpMTgAmlIMMwEn6BA?pwd=6ige)'.
+3. **Model Checkpoint**:
 You can download the .pth file '[MouldCTSegNet_best.pth](https://pan.baidu.com/s/1NgrRAHdkiWLf7K_mczP2EA?pwd=vhe4)'.
 
 ### Argument Configuration
