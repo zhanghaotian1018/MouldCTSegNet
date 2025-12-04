@@ -83,7 +83,21 @@ class MouldCTSegPipeline:
         def get_config(self):
             """获取配置"""
             try:
-                config = get_config(self.args)
+                # `get_config` expects several attributes (cfg, opts, batch_size, cache_mode, resume, amp_opt_level).
+                # Ensure they exist on the args namespace (provide sensible defaults if missing).
+                cfg_args = argparse.Namespace(**vars(self.args))
+                for attr, default in (
+                    ('cfg', getattr(self.args, 'cfg', './configs/MouldCTSegNet_predict.yaml')),
+                    ('opts', getattr(self.args, 'opts', None)),
+                    ('batch_size', getattr(self.args, 'batch_size', None)),
+                    ('cache_mode', getattr(self.args, 'cache_mode', 'part')),
+                    ('resume', getattr(self.args, 'resume', None)),
+                    ('amp_opt_level', getattr(self.args, 'amp_opt_level', 'O1')),
+                ):
+                    if not hasattr(cfg_args, attr):
+                        setattr(cfg_args, attr, default)
+
+                config = get_config(cfg_args)
                 return self.args, config
             except:
                 # 如果get_config不可用，返回基本配置
@@ -108,9 +122,32 @@ class MouldCTSegPipeline:
             # 加载模型权重
             if not os.path.isfile(self.args.model_path):
                 raise FileNotFoundError(f"模型文件未找到: {self.args.model_path}")
-            
-            state_dict = torch.load(self.args.model_path, map_location=self.device)
-            self.model.load_state_dict(state_dict)
+            checkpoint = torch.load(self.args.model_path, map_location=self.device)
+
+            # Handle checkpoints that wrap state_dict or have DataParallel prefixes
+            if isinstance(checkpoint, dict):
+                # common keys: 'state_dict', 'model', or raw mapping
+                if 'state_dict' in checkpoint:
+                    state_dict = checkpoint['state_dict']
+                elif 'model' in checkpoint:
+                    state_dict = checkpoint['model']
+                else:
+                    state_dict = checkpoint
+            else:
+                state_dict = checkpoint
+
+            # Remove 'module.' prefix if present (from DataParallel)
+            new_state = {}
+            try:
+                for k, v in state_dict.items():
+                    new_key = k
+                    if k.startswith('module.'):
+                        new_key = k[len('module.'):]
+                    new_state[new_key] = v
+                self.model.load_state_dict(new_state)
+            except Exception:
+                # Fallback: try to load directly (may raise a helpful error)
+                self.model.load_state_dict(state_dict)
             
             logging.info('模型加载成功')
             return self.model
@@ -220,8 +257,9 @@ class MouldCTSegPipeline:
             self.args = args
             self.config = config
             self.device = device
-            self.model_manager = self.ModelManager(config, args, device)
-            self.image_processor = self.ImageProcessor(img_size=args.img_size)
+            # Reference the nested classes via the outer class name
+            self.model_manager = MouldCTSegPipeline.ModelManager(config, args, device)
+            self.image_processor = MouldCTSegPipeline.ImageProcessor(img_size=args.img_size)
             
             # 创建输出目录
             os.makedirs(self.args.output_dir, exist_ok=True)
@@ -359,9 +397,9 @@ class MouldCTSegPipeline:
         bright_png_folder = os.path.join(output_folder, 'bright_part')
         dark_png_folder = os.path.join(output_folder, 'dark_part')
 
-        bright_png_files = glob.glob(bright_png_folder + os.sep + '*.png')[start_index:end_index]
+        bright_png_files = glob(bright_png_folder + os.sep + '*.png')[start_index:end_index]
         bright_png_files.sort()
-        dark_png_files = glob.glob(dark_png_folder + os.sep + '*.png')[start_index:end_index]
+        dark_png_files = glob(dark_png_folder + os.sep + '*.png')[start_index:end_index]
         dark_png_files.sort()
 
         dark_data_list = self.read_images(dark_png_files, 'png')
@@ -372,10 +410,10 @@ class MouldCTSegPipeline:
 
         # 加载原始图像和掩码
         ori_png_folder = args.root_path
-        ori_png_files = glob.glob(ori_png_folder + os.sep + '*.png')[start_index:end_index]
+        ori_png_files = glob(ori_png_folder + os.sep + '*.png')[start_index:end_index]
         ori_png_files.sort()
         mask_png_folder = args.output_dir
-        mask_png_files = glob.glob(mask_png_folder + os.sep + '*.png')[start_index:end_index]
+        mask_png_files = glob(mask_png_folder + os.sep + '*.png')[start_index:end_index]
         mask_png_files.sort()
 
         ori_data_list = self.read_images(ori_png_files, 'png')
