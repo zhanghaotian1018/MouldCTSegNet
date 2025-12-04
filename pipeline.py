@@ -56,7 +56,7 @@ class MouldCTSegPipeline:
                           default=r'./checkpoint/MouldCTSegNet_best.pth',
                           help='训练模型检查点路径')
         parser.add_argument('--cfg', type=str, 
-                          default='./configs/MouldCTSegNet.yaml', 
+                          default='./configs/MouldCTSegNet_predict.yaml', 
                           metavar="FILE", help='配置文件路径')
         
         # 提取参数
